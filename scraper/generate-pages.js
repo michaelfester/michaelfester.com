@@ -10,6 +10,7 @@ const ARTIST_ORDER = [
   'claude-monet',
   'paul-cezanne',
   'henri-matisse',
+  'pablo-picasso',
   'rembrandt',
   'egon-schiele',
 ];
@@ -82,12 +83,14 @@ function generateIndexPage(artists) {
       padding-bottom: 80px;
     }
     .artist-section {
-      margin: 0 auto 30px auto;
-      max-width: 800px;
-      width: 100%;
+      margin-bottom: 30px;
     }
     .artist-header {
-      padding: 20px 0;
+      padding: 20px 20px 16px 20px;
+    }
+    .artist-header-inner {
+      max-width: 800px;
+      margin: 0 auto;
     }
     .artist-name {
       font-size: 15px;
@@ -102,13 +105,13 @@ function generateIndexPage(artists) {
       display: block;
       max-height: 120px;
       overflow: hidden;
-      width: 100%;
     }
     .artist-quilt {
       display: flex;
       flex-wrap: wrap;
       line-height: 0;
-      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
     }
     .artwork {
       height: 40px;
@@ -153,7 +156,9 @@ function generateIndexPage(artists) {
     return `
     <div class="artist-section">
       <div class="artist-header">
-        <a href="./${artist.id}.html" class="artist-name">${artist.name}</a>
+        <div class="artist-header-inner">
+          <a href="./${artist.id}.html" class="artist-name">${artist.name}</a>
+        </div>
       </div>
       <a href="./${artist.id}.html" class="artist-quilt-link">
         <div class="artist-quilt">
@@ -179,10 +184,8 @@ function generateIndexPage(artists) {
         const artworks = Array.from(gallery.querySelectorAll('.artwork:not(.row-filler)'));
         if (artworks.length === 0) return;
 
-        // Get the gallery's bounding rect for accurate position calculations
-        const galleryRect = gallery.getBoundingClientRect();
-        const galleryWidth = galleryRect.width;
-
+        // First pass: find all rows and determine the widest row
+        const rows = [];
         let currentRowTop = artworks[0].getBoundingClientRect().top;
         let rowStartIndex = 0;
 
@@ -192,37 +195,44 @@ function generateIndexPage(artists) {
           const itemTop = isLastItem ? -1 : item.getBoundingClientRect().top;
 
           if (itemTop !== currentRowTop || isLastItem) {
-            // Calculate total width of items in this row
             let rowWidth = 0;
             for (let j = rowStartIndex; j < i; j++) {
               rowWidth += artworks[j].getBoundingClientRect().width;
             }
-
-            const gap = galleryWidth - rowWidth;
-            const lastInRow = artworks[i - 1];
-
-            if (gap > 1 && !isLastItem) {
-              const nextRowFirstItem = artworks[i];
-              const nextImg = nextRowFirstItem.querySelector('img');
-
-              if (nextImg) {
-                const filler = document.createElement('div');
-                filler.className = 'artwork row-filler';
-                filler.style.width = gap + 'px';
-                filler.style.overflow = 'hidden';
-
-                const imgClone = document.createElement('img');
-                imgClone.src = nextImg.src;
-                imgClone.alt = nextImg.alt;
-                imgClone.loading = 'lazy';
-
-                filler.appendChild(imgClone);
-                lastInRow.after(filler);
-              }
-            }
-
+            rows.push({ startIndex: rowStartIndex, endIndex: i - 1, width: rowWidth });
             rowStartIndex = i;
             currentRowTop = itemTop;
+          }
+        }
+
+        // Find the maximum row width (this is our target)
+        const maxRowWidth = Math.max(...rows.map(r => r.width));
+
+        // Second pass: fill gaps to match the widest row
+        for (let r = 0; r < rows.length - 1; r++) {
+          const row = rows[r];
+          const nextRow = rows[r + 1];
+          const gap = maxRowWidth - row.width;
+
+          if (gap > 1) {
+            const lastInRow = artworks[row.endIndex];
+            const nextRowFirstItem = artworks[nextRow.startIndex];
+            const nextImg = nextRowFirstItem.querySelector('img');
+
+            if (nextImg) {
+              const filler = document.createElement('div');
+              filler.className = 'artwork row-filler';
+              filler.style.width = gap + 'px';
+              filler.style.overflow = 'hidden';
+
+              const imgClone = document.createElement('img');
+              imgClone.src = nextImg.src;
+              imgClone.alt = nextImg.alt;
+              imgClone.loading = 'lazy';
+
+              filler.appendChild(imgClone);
+              lastInRow.after(filler);
+            }
           }
         }
       });
@@ -256,7 +266,21 @@ function generateIndexPage(artists) {
       });
     }
 
-    onAllImagesLoaded(fillRowGaps);
+    // Run fillRowGaps after layout is complete
+    onAllImagesLoaded(() => {
+      // Use requestAnimationFrame + setTimeout to ensure layout is fully calculated
+      requestAnimationFrame(() => {
+        setTimeout(fillRowGaps, 50);
+      });
+    });
+
+    // Also run on window load as a fallback
+    window.addEventListener('load', () => {
+      requestAnimationFrame(() => {
+        setTimeout(fillRowGaps, 100);
+      });
+    });
+
     window.addEventListener('resize', debounce(fillRowGaps, 100));
 
     function debounce(func, wait) {

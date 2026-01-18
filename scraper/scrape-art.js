@@ -9,6 +9,7 @@ const ARTISTS = [
   { id: 'claude-monet', name: 'Claude Monet' },
   { id: 'paul-cezanne', name: 'Paul Cézanne' },
   { id: 'henri-matisse', name: 'Henri Matisse' },
+  { id: 'pablo-picasso', name: 'Pablo Picasso' },
   { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'egon-schiele', name: 'Egon Schiele' },
 ];
