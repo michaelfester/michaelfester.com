@@ -1,0 +1,11 @@
+# Environment variables (contains secrets)
+.env
+
+# Dependencies
+node_modules/
+
+# Output files
+artists.json
+
+# OS files
+.DS_Store
