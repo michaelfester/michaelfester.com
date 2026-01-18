@@ -7,13 +7,14 @@ const sizeOf = require('image-size');
 // Configuration
 const ARTISTS = [
   { id: 'claude-monet', name: 'Claude Monet' },
-  // Add more artists here:
-  // { id: 'vincent-van-gogh', name: 'Vincent van Gogh' },
-  // { id: 'pablo-picasso', name: 'Pablo Picasso' },
+  { id: 'paul-cezanne', name: 'Paul Cézanne' },
+  { id: 'henri-matisse', name: 'Henri Matisse' },
+  { id: 'rembrandt', name: 'Rembrandt' },
+  { id: 'egon-schiele', name: 'Egon Schiele' },
 ];
 
 const S3_BUCKET = process.env.S3_BUCKET;
-const S3_REGION = process.env.AWS_REGION || 'us-east-1';
+const S3_REGION = process.env.AWS_REGION || 'us-east-2';
 const S3_PREFIX = 'quilts'; // Base folder in S3
 
 // Initialize S3 client

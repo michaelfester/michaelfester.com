@@ -4,6 +4,15 @@ const path = require('path');
 
 // Configuration
 const S3_BUCKET = process.env.S3_BUCKET;
+
+// Artist display order (by artist ID)
+const ARTIST_ORDER = [
+  'claude-monet',
+  'paul-cezanne',
+  'henri-matisse',
+  'rembrandt',
+  'egon-schiele',
+];
 const S3_REGION = process.env.AWS_REGION || 'us-east-1';
 const S3_BASE_URL = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
 
@@ -40,99 +49,225 @@ function generateIndexPage(artists) {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: #f5f5f5;
-      color: #333;
+      background: #000;
+      color: #FFF6ED;
       line-height: 1.6;
     }
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 40px 20px;
+      max-width: 100%;
     }
-    h1 {
-      font-size: 2.5rem;
-      margin-bottom: 40px;
-      font-weight: 300;
-      color: #111;
-    }
-    .artists-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-    }
-    .artist-card {
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: transform 0.2s, box-shadow 0.2s;
+    .back-link {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #FFF6ED;
+      font-size: 13px;
+      font-weight: normal;
+      opacity: 0.6;
       text-decoration: none;
-      color: inherit;
-      display: block;
     }
-    .artist-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    .back-link:hover {
+      opacity: 1;
     }
-    .artist-preview {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 2px;
-      background: #eee;
+    .back-link .chevron {
+      margin-right: 4px;
     }
-    .artist-preview img {
-      width: 100%;
-      aspect-ratio: 1;
-      object-fit: cover;
+    .back-link .label {
+      text-decoration: underline dotted;
+      text-decoration-color: rgba(255, 246, 237, 0.5);
+      text-underline-offset: 3px;
     }
-    .artist-info {
-      padding: 20px;
+    .artists-list {
+      padding-top: 80px;
+      padding-bottom: 80px;
+    }
+    .artist-section {
+      margin: 0 auto 30px auto;
+      max-width: 800px;
+    }
+    .artist-header {
+      padding: 20px 0;
     }
     .artist-name {
-      font-size: 1.25rem;
-      font-weight: 500;
-      margin-bottom: 4px;
+      font-size: 15px;
+      font-weight: normal;
+      color: #FFF6ED;
+      text-decoration: none;
     }
-    .artist-count {
-      color: #666;
-      font-size: 0.9rem;
+    .artist-name:hover {
+      text-decoration: underline;
+    }
+    .artist-quilt-link {
+      display: block;
+      max-height: 120px;
+      overflow: hidden;
+    }
+    .artist-quilt {
+      display: flex;
+      flex-wrap: wrap;
+      line-height: 0;
+    }
+    .artwork {
+      height: 40px;
+      background: #000;
+      overflow: hidden;
+    }
+    .artwork img {
+      height: 40px;
+      width: 100%;
+      display: block;
+      object-fit: cover;
+    }
+    .row-filler {
+      position: relative;
+    }
+    .row-filler img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: auto;
+      height: 40px;
+      object-fit: none;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Art Collection</h1>
-    <div class="artists-grid">
-      ${artists.map(artist => {
-        // Get first 6 artworks for preview
-        const previewArtworks = artist.artworks.slice(0, 6);
-        return `
-      <a href="quilts/${artist.id}.html" class="artist-card">
-        <div class="artist-preview">
-          ${previewArtworks.map(artwork => `
-          <img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title}" loading="lazy">
-          `).join('')}
+    <a href="../" class="back-link"><span class="chevron">‹</span><span class="label">Back to michaelfester.com</span></a>
+    <div class="artists-list">
+    ${artists.map(artist => {
+    // Filter out artworks with unknown year and sort by year
+    const knownYearArtworks = artist.artworks
+      .filter(a => a.year && a.year !== 'Unknown')
+      .sort((a, b) => {
+        const yearA = parseInt(a.year) || 0;
+        const yearB = parseInt(b.year) || 0;
+        return yearA - yearB;
+      });
+    // Start from middle of collection for preview
+    const startIndex = Math.floor(knownYearArtworks.length / 3);
+    const previewArtworks = knownYearArtworks.slice(startIndex);
+    return `
+    <div class="artist-section">
+      <div class="artist-header">
+        <a href="./${artist.id}.html" class="artist-name">${artist.name}</a>
+      </div>
+      <a href="./${artist.id}.html" class="artist-quilt-link">
+        <div class="artist-quilt">
+          ${previewArtworks.map(artwork => {
+            const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
+            const aspectRatio = width / height;
+            const calculatedWidth = Math.round(40 * aspectRatio);
+            return `<div class="artwork" style="width:${calculatedWidth}px"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+          }).join('')}
         </div>
-        <div class="artist-info">
-          <div class="artist-name">${artist.name}</div>
-          <div class="artist-count">${artist.artworks.length} artworks</div>
-        </div>
-      </a>`;
-      }).join('')}
+      </a>
+    </div>`;
+  }).join('')}
     </div>
   </div>
+
+  <script>
+    function fillRowGaps() {
+      document.querySelectorAll('.artist-quilt').forEach(gallery => {
+        // Remove existing fillers
+        gallery.querySelectorAll('.row-filler').forEach(el => el.remove());
+
+        const artworks = Array.from(gallery.querySelectorAll('.artwork:not(.row-filler)'));
+        if (artworks.length === 0) return;
+
+        const galleryWidth = gallery.offsetWidth;
+        let currentRowTop = artworks[0].offsetTop;
+
+        for (let i = 1; i <= artworks.length; i++) {
+          const isLastItem = i === artworks.length;
+          const item = isLastItem ? null : artworks[i];
+          const itemTop = isLastItem ? -1 : item.offsetTop;
+
+          if (itemTop !== currentRowTop || isLastItem) {
+            const lastInRow = artworks[i - 1];
+            const rowEndX = lastInRow.offsetLeft + lastInRow.offsetWidth;
+            const gap = galleryWidth - rowEndX;
+
+            if (gap > 0 && !isLastItem) {
+              const nextRowFirstItem = artworks[i];
+              const nextImg = nextRowFirstItem.querySelector('img');
+
+              if (nextImg) {
+                const filler = document.createElement('div');
+                filler.className = 'artwork row-filler';
+                filler.style.width = gap + 'px';
+                filler.style.overflow = 'hidden';
+
+                const imgClone = document.createElement('img');
+                imgClone.src = nextImg.src;
+                imgClone.alt = nextImg.alt;
+                imgClone.loading = 'lazy';
+
+                filler.appendChild(imgClone);
+                lastInRow.after(filler);
+              }
+            }
+
+            currentRowTop = itemTop;
+          }
+        }
+      });
+    }
+
+    // Wait for all images to load before filling gaps
+    function onAllImagesLoaded(callback) {
+      const images = document.querySelectorAll('.artist-quilt img');
+      let loaded = 0;
+      const total = images.length;
+
+      if (total === 0) {
+        callback();
+        return;
+      }
+
+      images.forEach(img => {
+        if (img.complete) {
+          loaded++;
+          if (loaded === total) callback();
+        } else {
+          img.addEventListener('load', () => {
+            loaded++;
+            if (loaded === total) callback();
+          });
+          img.addEventListener('error', () => {
+            loaded++;
+            if (loaded === total) callback();
+          });
+        }
+      });
+    }
+
+    onAllImagesLoaded(fillRowGaps);
+    window.addEventListener('resize', debounce(fillRowGaps, 100));
+
+    function debounce(func, wait) {
+      let timeout;
+      return function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(func, wait);
+      };
+    }
+  </script>
 </body>
 </html>`;
 }
 
 // HTML template for individual artist pages
 function generateArtistPage(artist) {
-  // Sort artworks by year
-  const sortedArtworks = [...artist.artworks].sort((a, b) => {
-    const yearA = parseInt(a.year) || 0;
-    const yearB = parseInt(b.year) || 0;
-    return yearA - yearB;
-  });
+  // Filter out artworks with unknown year and sort by year
+  const sortedArtworks = [...artist.artworks]
+    .filter(a => a.year && a.year !== 'Unknown')
+    .sort((a, b) => {
+      const yearA = parseInt(a.year) || 0;
+      const yearB = parseInt(b.year) || 0;
+      return yearA - yearB;
+    });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -148,37 +283,42 @@ function generateArtistPage(artist) {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: #f5f5f5;
-      color: #333;
+      background: #000;
+      color: #FFF6ED;
       line-height: 1.6;
     }
     .container {
       max-width: 100%;
     }
     .header {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 40px 20px 40px;
+      padding: 80px 20px 80px 20px;
+      text-align: center;
     }
     .back-link {
-      color: #666;
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #FFF6ED;
+      font-size: 13px;
+      font-weight: normal;
+      opacity: 0.6;
       text-decoration: none;
-      font-size: 0.9rem;
-      display: inline-block;
-      margin-bottom: 16px;
     }
     .back-link:hover {
-      color: #333;
+      opacity: 1;
+    }
+    .back-link .chevron {
+      margin-right: 4px;
+    }
+    .back-link .label {
+      text-decoration: underline dotted;
+      text-decoration-color: rgba(255, 246, 237, 0.5);
+      text-underline-offset: 3px;
     }
     h1 {
-      font-size: 2.5rem;
-      font-weight: 300;
-      color: #111;
-      margin-bottom: 8px;
-    }
-    .artwork-count {
-      color: #666;
-      font-size: 1rem;
+      font-size: 20px;
+      font-weight: 400;
+      color: #FFF6ED;
     }
     .gallery {
       display: flex;
@@ -189,7 +329,7 @@ function generateArtistPage(artist) {
       height: 60px;
       cursor: pointer;
       transition: opacity 0.2s;
-      background: #e0e0e0;
+      background: #000;
       overflow: hidden;
     }
     .artwork:hover {
@@ -201,6 +341,17 @@ function generateArtistPage(artist) {
       display: block;
       object-fit: cover;
     }
+    .row-filler {
+      position: relative;
+    }
+    .row-filler img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: auto;
+      height: 60px;
+      object-fit: none;
+    }
 
     /* Lightbox */
     .lightbox {
@@ -210,38 +361,45 @@ function generateArtistPage(artist) {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.95);
+      background: #000;
       z-index: 1000;
-      justify-content: center;
-      align-items: center;
+      flex-direction: column;
       cursor: pointer;
     }
     .lightbox.active {
       display: flex;
     }
+    .lightbox-image-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
     .lightbox img {
       max-width: 95%;
-      max-height: 95%;
+      max-height: 100%;
       object-fit: contain;
     }
-    .lightbox-info {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      text-align: center;
-      font-size: 0.9rem;
+    .lightbox-bar {
+      height: 40px;
+      background: #000;
+      color: #FFF6ED;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 13px;
     }
     .lightbox-close {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      color: white;
-      font-size: 2rem;
+      top: 12px;
+      right: 12px;
+      color: #FFF6ED;
+      font-size: 20px;
       cursor: pointer;
       opacity: 0.7;
       transition: opacity 0.2s;
+      line-height: 1;
     }
     .lightbox-close:hover {
       opacity: 1;
@@ -251,28 +409,29 @@ function generateArtistPage(artist) {
 <body>
   <div class="container">
     <div class="header">
-      <a href="../quilts.html" class="back-link">← Back to Artists</a>
+      <a href="./" class="back-link"><span class="chevron">‹</span><span class="label">Back to artists</span></a>
       <h1>${artist.name}</h1>
-      <div class="artwork-count">${artist.artworks.length} artworks</div>
     </div>
     <div class="gallery">
       ${sortedArtworks.map(artwork => {
-        const escapedTitle = artwork.title.replace(/[''\']/g, "\\'");
-        // Calculate width based on aspect ratio (height is fixed at 60px)
-        const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
-        const aspectRatio = width / height;
-        const calculatedWidth = Math.round(60 * aspectRatio);
-        return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
-      }).join('')}
+    const escapedTitle = artwork.title.replace(/[''\']/g, "\\'");
+    // Calculate width based on aspect ratio (height is fixed at 60px)
+    const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
+    const aspectRatio = width / height;
+    const calculatedWidth = Math.round(60 * aspectRatio);
+    return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+  }).join('')}
     </div>
   </div>
 
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
     <span class="lightbox-close">&times;</span>
-    <img id="lightbox-img" src="" alt="">
-    <div class="lightbox-info">
-      <div id="lightbox-title"></div>
-      <div id="lightbox-meta"></div>
+    <div class="lightbox-bar"></div>
+    <div class="lightbox-image-container">
+      <img id="lightbox-img" src="" alt="">
+    </div>
+    <div class="lightbox-bar">
+      <span id="lightbox-caption"></span>
     </div>
   </div>
 
@@ -280,12 +439,10 @@ function generateArtistPage(artist) {
     function openLightbox(src, title, year, dimensions) {
       const lightbox = document.getElementById('lightbox');
       const img = document.getElementById('lightbox-img');
-      const titleEl = document.getElementById('lightbox-title');
-      const metaEl = document.getElementById('lightbox-meta');
+      const captionEl = document.getElementById('lightbox-caption');
 
       img.src = src;
-      titleEl.textContent = title;
-      metaEl.textContent = year + ' · ' + dimensions;
+      captionEl.textContent = title + ', ' + year;
       lightbox.classList.add('active');
       document.body.style.overflow = 'hidden';
     }
@@ -301,6 +458,82 @@ function generateArtistPage(artist) {
         closeLightbox();
       }
     });
+
+    // Fill row gaps with cropped images from next row
+    function fillRowGaps() {
+      const gallery = document.querySelector('.gallery');
+      if (!gallery) return;
+
+      // Remove existing fillers
+      gallery.querySelectorAll('.row-filler').forEach(el => el.remove());
+
+      const artworks = Array.from(gallery.querySelectorAll('.artwork:not(.row-filler)'));
+      if (artworks.length === 0) return;
+
+      const galleryWidth = gallery.offsetWidth;
+      let currentRowStart = 0;
+      let currentRowTop = artworks[0].offsetTop;
+
+      for (let i = 1; i <= artworks.length; i++) {
+        const isLastItem = i === artworks.length;
+        const item = isLastItem ? null : artworks[i];
+        const itemTop = isLastItem ? -1 : item.offsetTop;
+
+        // Detect row change
+        if (itemTop !== currentRowTop || isLastItem) {
+          // Calculate gap at end of current row
+          const lastInRow = artworks[i - 1];
+          const rowEndX = lastInRow.offsetLeft + lastInRow.offsetWidth;
+          const gap = galleryWidth - rowEndX;
+
+          // If there's a gap and there's a next row, fill it
+          if (gap > 0 && !isLastItem) {
+            const nextRowFirstItem = artworks[i];
+            const nextImg = nextRowFirstItem.querySelector('img');
+
+            if (nextImg) {
+              // Create filler element
+              const filler = document.createElement('div');
+              filler.className = 'artwork row-filler';
+              filler.style.width = gap + 'px';
+              filler.style.overflow = 'hidden';
+
+              // Copy onclick from next item
+              const onclickAttr = nextRowFirstItem.getAttribute('onclick');
+              if (onclickAttr) {
+                filler.setAttribute('onclick', onclickAttr);
+              }
+
+              // Create image clone
+              const imgClone = document.createElement('img');
+              imgClone.src = nextImg.src;
+              imgClone.alt = nextImg.alt;
+              imgClone.loading = 'lazy';
+
+              filler.appendChild(imgClone);
+
+              // Insert after last item in row
+              lastInRow.after(filler);
+            }
+          }
+
+          currentRowStart = i;
+          currentRowTop = itemTop;
+        }
+      }
+    }
+
+    // Run on load and resize
+    window.addEventListener('load', fillRowGaps);
+    window.addEventListener('resize', debounce(fillRowGaps, 100));
+
+    function debounce(func, wait) {
+      let timeout;
+      return function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(func, wait);
+      };
+    }
   </script>
 </body>
 </html>`;
@@ -323,7 +556,16 @@ function main() {
   }
 
   const data = JSON.parse(fs.readFileSync(ARTISTS_FILE, 'utf8'));
-  const artists = data.artists.filter(a => a.artworks.length > 0);
+  const artists = data.artists
+    .filter(a => a.artworks.length > 0)
+    .sort((a, b) => {
+      const indexA = ARTIST_ORDER.indexOf(a.id);
+      const indexB = ARTIST_ORDER.indexOf(b.id);
+      // Artists not in ARTIST_ORDER go to the end
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
 
   console.log(`Found ${artists.length} artists with artworks`);
 
@@ -335,19 +577,19 @@ function main() {
 
   // Generate main index page
   const indexHtml = generateIndexPage(artists);
-  const indexPath = path.join(OUTPUT_DIR, 'quilts.html');
+  const indexPath = path.join(quiltsDir, 'index.html');
   fs.writeFileSync(indexPath, indexHtml);
-  console.log(`Generated: quilts.html`);
+  console.log(`Generated: quilts/index.html`);
 
   // Generate individual artist pages
   for (const artist of artists) {
     const artistHtml = generateArtistPage(artist);
     const artistPath = path.join(quiltsDir, `${artist.id}.html`);
     fs.writeFileSync(artistPath, artistHtml);
-    console.log(`Generated: quilts/${artist.id}.html (${artist.artworks.length} artworks)`);
+    console.log(`Generated: ./${artist.id}.html (${artist.artworks.length} artworks)`);
   }
 
-  console.log('\nDone! Open quilts.html to view the gallery.');
+  console.log('\nDone! Open quilts/index.html to view the gallery.');
 }
 
 main();
