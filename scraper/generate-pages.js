@@ -84,6 +84,7 @@ function generateIndexPage(artists) {
     .artist-section {
       margin: 0 auto 30px auto;
       max-width: 800px;
+      width: 100%;
     }
     .artist-header {
       padding: 20px 0;
@@ -101,11 +102,13 @@ function generateIndexPage(artists) {
       display: block;
       max-height: 120px;
       overflow: hidden;
+      width: 100%;
     }
     .artist-quilt {
       display: flex;
       flex-wrap: wrap;
       line-height: 0;
+      width: 100%;
     }
     .artwork {
       height: 40px;
@@ -133,7 +136,7 @@ function generateIndexPage(artists) {
 </head>
 <body>
   <div class="container">
-    <a href="../" class="back-link"><span class="chevron">‹</span><span class="label">Back to michaelfester.com</span></a>
+    <a href="../index.html" class="back-link"><span class="chevron">‹</span><span class="label">Back to michaelfester.com</span></a>
     <div class="artists-list">
     ${artists.map(artist => {
     // Filter out artworks with unknown year and sort by year
@@ -155,11 +158,11 @@ function generateIndexPage(artists) {
       <a href="./${artist.id}.html" class="artist-quilt-link">
         <div class="artist-quilt">
           ${previewArtworks.map(artwork => {
-            const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
-            const aspectRatio = width / height;
-            const calculatedWidth = Math.round(40 * aspectRatio);
-            return `<div class="artwork" style="width:${calculatedWidth}px"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
-          }).join('')}
+      const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
+      const aspectRatio = width / height;
+      const calculatedWidth = Math.round(40 * aspectRatio);
+      return `<div class="artwork" style="width:${calculatedWidth}px"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+    }).join('')}
         </div>
       </a>
     </div>`;
@@ -176,20 +179,29 @@ function generateIndexPage(artists) {
         const artworks = Array.from(gallery.querySelectorAll('.artwork:not(.row-filler)'));
         if (artworks.length === 0) return;
 
-        const galleryWidth = gallery.offsetWidth;
-        let currentRowTop = artworks[0].offsetTop;
+        // Get the gallery's bounding rect for accurate position calculations
+        const galleryRect = gallery.getBoundingClientRect();
+        const galleryWidth = galleryRect.width;
+
+        let currentRowTop = artworks[0].getBoundingClientRect().top;
+        let rowStartIndex = 0;
 
         for (let i = 1; i <= artworks.length; i++) {
           const isLastItem = i === artworks.length;
           const item = isLastItem ? null : artworks[i];
-          const itemTop = isLastItem ? -1 : item.offsetTop;
+          const itemTop = isLastItem ? -1 : item.getBoundingClientRect().top;
 
           if (itemTop !== currentRowTop || isLastItem) {
-            const lastInRow = artworks[i - 1];
-            const rowEndX = lastInRow.offsetLeft + lastInRow.offsetWidth;
-            const gap = galleryWidth - rowEndX;
+            // Calculate total width of items in this row
+            let rowWidth = 0;
+            for (let j = rowStartIndex; j < i; j++) {
+              rowWidth += artworks[j].getBoundingClientRect().width;
+            }
 
-            if (gap > 0 && !isLastItem) {
+            const gap = galleryWidth - rowWidth;
+            const lastInRow = artworks[i - 1];
+
+            if (gap > 1 && !isLastItem) {
               const nextRowFirstItem = artworks[i];
               const nextImg = nextRowFirstItem.querySelector('img');
 
@@ -209,6 +221,7 @@ function generateIndexPage(artists) {
               }
             }
 
+            rowStartIndex = i;
             currentRowTop = itemTop;
           }
         }
@@ -409,7 +422,7 @@ function generateArtistPage(artist) {
 <body>
   <div class="container">
     <div class="header">
-      <a href="./" class="back-link"><span class="chevron">‹</span><span class="label">Back to artists</span></a>
+      <a href="./index.html" class="back-link"><span class="chevron">‹</span><span class="label">Back to artists</span></a>
       <h1>${artist.name}</h1>
     </div>
     <div class="gallery">
