@@ -189,14 +189,17 @@ function generateArtistPage(artist) {
       height: 60px;
       cursor: pointer;
       transition: opacity 0.2s;
+      background: #e0e0e0;
+      overflow: hidden;
     }
     .artwork:hover {
       opacity: 0.8;
     }
     .artwork img {
       height: 60px;
-      width: auto;
+      width: 100%;
       display: block;
+      object-fit: cover;
     }
 
     /* Lightbox */
@@ -255,7 +258,11 @@ function generateArtistPage(artist) {
     <div class="gallery">
       ${sortedArtworks.map(artwork => {
         const escapedTitle = artwork.title.replace(/[''\']/g, "\\'");
-        return `<div class="artwork" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+        // Calculate width based on aspect ratio (height is fixed at 60px)
+        const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
+        const aspectRatio = width / height;
+        const calculatedWidth = Math.round(60 * aspectRatio);
+        return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
       }).join('')}
     </div>
   </div>
