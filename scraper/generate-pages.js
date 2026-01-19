@@ -105,11 +105,15 @@ function generateIndexPage(artists) {
       display: block;
       max-width: 800px;
       margin: 0 auto;
+      background: #111;
     }
     .artist-preview {
       width: 100%;
+      height: auto;
       display: block;
       transition: opacity 0.2s;
+      aspect-ratio: 800 / 120;
+      object-fit: cover;
     }
     .artist-preview:hover {
       opacity: 0.8;
