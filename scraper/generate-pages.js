@@ -14,6 +14,50 @@ const ARTIST_ORDER = [
   'rembrandt',
   'egon-schiele',
 ];
+
+// Background colors in OKLCH (L, C, H) matching each artist's palette
+// L = lightness (0-1), C = chroma (0-0.4), H = hue (0-360)
+const ARTIST_COLORS = {
+  'claude-monet': [
+    { l: 0.65, c: 0.06, h: 230 },  // soft blue
+    { l: 0.68, c: 0.05, h: 280 },  // lavender
+    { l: 0.66, c: 0.05, h: 150 },  // sage green
+  ],
+  'paul-cezanne': [
+    { l: 0.58, c: 0.08, h: 70 },   // warm ochre
+    { l: 0.55, c: 0.06, h: 45 },   // brown
+    { l: 0.60, c: 0.07, h: 140 },  // olive green
+  ],
+  'henri-matisse': [
+    { l: 0.62, c: 0.10, h: 25 },   // terracotta
+    { l: 0.65, c: 0.12, h: 350 }, // coral pink
+    { l: 0.60, c: 0.10, h: 220 },  // blue
+  ],
+  'pablo-picasso': [
+    { l: 0.55, c: 0.06, h: 250 },  // dusty blue
+    { l: 0.58, c: 0.07, h: 20 },   // rose
+    { l: 0.52, c: 0.05, h: 300 },  // mauve
+  ],
+  'rembrandt': [
+    { l: 0.40, c: 0.07, h: 60 },   // deep amber
+    { l: 0.35, c: 0.06, h: 40 },   // warm brown
+    { l: 0.38, c: 0.05, h: 30 },   // dark sienna
+  ],
+  'egon-schiele': [
+    { l: 0.55, c: 0.08, h: 50 },   // flesh ochre
+    { l: 0.50, c: 0.07, h: 30 },   // terracotta brown
+    { l: 0.52, c: 0.06, h: 70 },   // mustard
+  ],
+};
+
+// Generate random OKLCH color with hue variation
+function getRandomArtistColor(artistId) {
+  const colors = ARTIST_COLORS[artistId];
+  if (!colors) return '#000';
+  const base = colors[Math.floor(Math.random() * colors.length)];
+  const hueVariation = (Math.random() - 0.5) * 60; // ±30 degrees
+  return `oklch(${base.l} ${base.c} ${base.h + hueVariation})`;
+}
 const S3_REGION = process.env.AWS_REGION || 'us-east-1';
 const S3_BASE_URL = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
 
@@ -213,7 +257,6 @@ function generateArtistPage(artist) {
       height: 60px;
       cursor: pointer;
       transition: opacity 0.2s;
-      background: #000;
       overflow: hidden;
     }
     .artwork:hover {
@@ -298,7 +341,8 @@ function generateArtistPage(artist) {
     const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
     const aspectRatio = width / height;
     const calculatedWidth = Math.round(60 * aspectRatio);
-    return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.miniPath || artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+    const bgColor = getRandomArtistColor(artist.id);
+    return `<div class="artwork" style="width:${calculatedWidth}px;background:${bgColor}" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.miniPath || artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
   }).join('')}
     </div>
   </div>
@@ -376,6 +420,9 @@ function generateArtistPage(artist) {
               filler.className = 'artwork row-filler';
               filler.style.width = gap + 'px';
               filler.style.overflow = 'hidden';
+
+              // Copy background color from next item
+              filler.style.background = nextRowFirstItem.style.background;
 
               // Copy onclick from next item
               const onclickAttr = nextRowFirstItem.getAttribute('onclick');
