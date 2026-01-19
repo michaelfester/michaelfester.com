@@ -299,7 +299,7 @@ function generateArtistPage(artist) {
     const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
     const aspectRatio = width / height;
     const calculatedWidth = Math.round(60 * aspectRatio);
-    return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
+    return `<div class="artwork" style="width:${calculatedWidth}px" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.miniPath || artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
   }).join('')}
     </div>
   </div>

@@ -48,6 +48,8 @@ Scrapes artwork from WikiArt.org and uploads images to Amazon S3 with structured
 
 This allows anyone to view the images (required for the gallery to work).
 
+The S3 bucket is accessible here: [https://us-east-2.console.aws.amazon.com/s3/buckets/artworks-all](https://us-east-2.console.aws.amazon.com/s3/buckets/artworks-all).
+
 ### Step 3: Create an IAM User with S3 Access
 
 1. Go to [IAM Console](https://console.aws.amazon.com/iam/)

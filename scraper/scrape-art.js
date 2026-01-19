@@ -3,6 +3,7 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const fs = require('fs');
 const path = require('path');
 const sizeOf = require('image-size');
+const sharp = require('sharp');
 
 // Configuration
 const ARTISTS = [
@@ -315,6 +316,22 @@ async function processArtwork(artwork, artistId, existingArtwork = null) {
         await uploadToS3(thumbnailBuffer, thumbnailKey);
         result.thumbnailPath = thumbnailKey;
         console.log(`  [${artwork.title}] Thumbnail done`);
+
+        // Also generate mini thumbnail (40px height, webp)
+        try {
+          const miniBuffer = await sharp(thumbnailBuffer)
+            .resize({ height: 40 })
+            .webp({ quality: 80 })
+            .toBuffer();
+
+          const baseFilename = `${result.year} - ${result.dimensions} - ${result.title}`;
+          const miniKey = `${S3_PREFIX}/${artistId}/thumbnails/mini/${baseFilename}.webp`;
+          await uploadToS3(miniBuffer, miniKey, 'image/webp');
+          result.miniPath = miniKey;
+          console.log(`  [${artwork.title}] Mini done`);
+        } catch (miniError) {
+          console.error(`  [${artwork.title}] Mini error: ${miniError.message}`);
+        }
       } catch (thumbError) {
         console.error(`  [${artwork.title}] Thumbnail error: ${thumbError.message}`);
         // Continue without thumbnail - original is still valid
@@ -350,8 +367,11 @@ async function processArtist(artist, existingArtworks = [], onProgress = null) {
       return !existing || !existing.thumbnailPath;
     });
 
+    // Find artworks that have thumbnails but need mini
+    const needsMiniOnly = Array.from(existingByTitle.values()).filter(a => a.thumbnailPath && !a.miniPath);
+
     const fullyComplete = artworkList.length - toProcess.length;
-    console.log(`${toProcess.length} artworks to process (${fullyComplete} fully complete with thumbnails)`);
+    console.log(`${toProcess.length} new artworks to process, ${needsMiniOnly.length} need mini thumbnails (${fullyComplete} with thumbnails)`);
 
     // Process in batches
     for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
@@ -384,6 +404,47 @@ async function processArtist(artist, existingArtworks = [], onProgress = null) {
       // Small delay between batches
       if (i + BATCH_SIZE < toProcess.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Process mini thumbnails for existing artworks (from S3)
+    if (needsMiniOnly.length > 0) {
+      console.log(`\nGenerating ${needsMiniOnly.length} mini thumbnails from S3...`);
+
+      for (let i = 0; i < needsMiniOnly.length; i += BATCH_SIZE) {
+        const batch = needsMiniOnly.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(needsMiniOnly.length / BATCH_SIZE);
+
+        console.log(`\nMini batch ${batchNum}/${totalBatches} (${i + 1}-${Math.min(i + BATCH_SIZE, needsMiniOnly.length)})`);
+
+        await Promise.all(batch.map(async (artwork) => {
+          try {
+            // Download thumbnail from S3
+            const s3ThumbnailUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${encodeURI(artwork.thumbnailPath)}`;
+            const thumbnailBuffer = await downloadImage(s3ThumbnailUrl);
+
+            // Resize to 40px height and convert to webp
+            const miniBuffer = await sharp(thumbnailBuffer)
+              .resize({ height: 40 })
+              .webp({ quality: 80 })
+              .toBuffer();
+
+            // Store in thumbnails/mini subfolder with .webp extension
+            const baseFilename = `${artwork.year} - ${artwork.dimensions} - ${artwork.title}`;
+            const miniKey = `${S3_PREFIX}/${artist.id}/thumbnails/mini/${baseFilename}.webp`;
+            await uploadToS3(miniBuffer, miniKey, 'image/webp');
+            artwork.miniPath = miniKey;
+            console.log(`  [${artwork.title}] Mini done`);
+          } catch (miniError) {
+            console.error(`  [${artwork.title}] Mini error: ${miniError.message}`);
+          }
+        }));
+
+        // Save progress after each batch
+        if (onProgress) {
+          onProgress({ id: artist.id, name: artist.name, artworks: Array.from(existingByTitle.values()) });
+        }
       }
     }
 
