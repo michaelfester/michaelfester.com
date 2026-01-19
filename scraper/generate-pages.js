@@ -94,7 +94,7 @@ function generateIndexPage(artists) {
       margin-bottom: 30px;
     }
     .artist-header {
-      padding: 20px 12px 10px 12px;
+      padding: 20px 16px 10px 16px;
     }
     .artist-header-inner {
       max-width: 800px;
@@ -113,6 +113,7 @@ function generateIndexPage(artists) {
       display: block;
       max-width: 800px;
       margin: 0 auto;
+      padding: 0px 16px 0px 16px;
       background: #111;
     }
     .artist-preview {
