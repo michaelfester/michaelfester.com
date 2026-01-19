@@ -314,7 +314,6 @@ async function processArtwork(artwork, artistId, existingArtwork = null) {
 
         await uploadToS3(thumbnailBuffer, thumbnailKey);
         result.thumbnailPath = thumbnailKey;
-
         console.log(`  [${artwork.title}] Thumbnail done`);
       } catch (thumbError) {
         console.error(`  [${artwork.title}] Thumbnail error: ${thumbError.message}`);

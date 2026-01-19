@@ -41,7 +41,7 @@ function generateIndexPage(artists) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Art Collection</title>
+  <title>Quilts</title>
   <style>
     * {
       margin: 0;
@@ -86,14 +86,14 @@ function generateIndexPage(artists) {
       margin-bottom: 30px;
     }
     .artist-header {
-      padding: 20px 20px 16px 20px;
+      padding: 20px 12px 10px 12px;
     }
     .artist-header-inner {
       max-width: 800px;
       margin: 0 auto;
     }
     .artist-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: normal;
       color: #FFF6ED;
       text-decoration: none;
@@ -103,37 +103,16 @@ function generateIndexPage(artists) {
     }
     .artist-quilt-link {
       display: block;
-      max-height: 120px;
-      overflow: hidden;
-    }
-    .artist-quilt {
-      display: flex;
-      flex-wrap: wrap;
-      line-height: 0;
       max-width: 800px;
       margin: 0 auto;
     }
-    .artwork {
-      height: 40px;
-      background: #000;
-      overflow: hidden;
-    }
-    .artwork img {
-      height: 40px;
+    .artist-preview {
       width: 100%;
       display: block;
-      object-fit: cover;
+      transition: opacity 0.2s;
     }
-    .row-filler {
-      position: relative;
-    }
-    .row-filler img {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: auto;
-      height: 40px;
-      object-fit: none;
+    .artist-preview:hover {
+      opacity: 0.8;
     }
   </style>
 </head>
@@ -141,19 +120,7 @@ function generateIndexPage(artists) {
   <div class="container">
     <a href="../index.html" class="back-link"><span class="chevron">‹</span><span class="label">Back to michaelfester.com</span></a>
     <div class="artists-list">
-    ${artists.map(artist => {
-    // Filter out artworks with unknown year and sort by year
-    const knownYearArtworks = artist.artworks
-      .filter(a => a.year && a.year !== 'Unknown')
-      .sort((a, b) => {
-        const yearA = parseInt(a.year) || 0;
-        const yearB = parseInt(b.year) || 0;
-        return yearA - yearB;
-      });
-    // Start from middle of collection for preview
-    const startIndex = Math.floor(knownYearArtworks.length / 3);
-    const previewArtworks = knownYearArtworks.slice(startIndex);
-    return `
+    ${artists.map(artist => `
     <div class="artist-section">
       <div class="artist-header">
         <div class="artist-header-inner">
@@ -161,136 +128,12 @@ function generateIndexPage(artists) {
         </div>
       </div>
       <a href="./${artist.id}.html" class="artist-quilt-link">
-        <div class="artist-quilt">
-          ${previewArtworks.map(artwork => {
-      const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
-      const aspectRatio = width / height;
-      const calculatedWidth = Math.round(40 * aspectRatio);
-      return `<div class="artwork" style="width:${calculatedWidth}px"><img src="${getS3Url(artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy"></div>`;
-    }).join('')}
-        </div>
+        <img src="./previews/${artist.id}.webp" alt="${artist.name}" class="artist-preview" loading="lazy">
       </a>
-    </div>`;
-  }).join('')}
+    </div>`).join('')}
     </div>
   </div>
 
-  <script>
-    function fillRowGaps() {
-      document.querySelectorAll('.artist-quilt').forEach(gallery => {
-        // Remove existing fillers
-        gallery.querySelectorAll('.row-filler').forEach(el => el.remove());
-
-        const artworks = Array.from(gallery.querySelectorAll('.artwork:not(.row-filler)'));
-        if (artworks.length === 0) return;
-
-        // First pass: find all rows and determine the widest row
-        const rows = [];
-        let currentRowTop = artworks[0].getBoundingClientRect().top;
-        let rowStartIndex = 0;
-
-        for (let i = 1; i <= artworks.length; i++) {
-          const isLastItem = i === artworks.length;
-          const item = isLastItem ? null : artworks[i];
-          const itemTop = isLastItem ? -1 : item.getBoundingClientRect().top;
-
-          if (itemTop !== currentRowTop || isLastItem) {
-            let rowWidth = 0;
-            for (let j = rowStartIndex; j < i; j++) {
-              rowWidth += artworks[j].getBoundingClientRect().width;
-            }
-            rows.push({ startIndex: rowStartIndex, endIndex: i - 1, width: rowWidth });
-            rowStartIndex = i;
-            currentRowTop = itemTop;
-          }
-        }
-
-        // Find the maximum row width (this is our target)
-        const maxRowWidth = Math.max(...rows.map(r => r.width));
-
-        // Second pass: fill gaps to match the widest row
-        for (let r = 0; r < rows.length - 1; r++) {
-          const row = rows[r];
-          const nextRow = rows[r + 1];
-          const gap = maxRowWidth - row.width;
-
-          if (gap > 1) {
-            const lastInRow = artworks[row.endIndex];
-            const nextRowFirstItem = artworks[nextRow.startIndex];
-            const nextImg = nextRowFirstItem.querySelector('img');
-
-            if (nextImg) {
-              const filler = document.createElement('div');
-              filler.className = 'artwork row-filler';
-              filler.style.width = gap + 'px';
-              filler.style.overflow = 'hidden';
-
-              const imgClone = document.createElement('img');
-              imgClone.src = nextImg.src;
-              imgClone.alt = nextImg.alt;
-              imgClone.loading = 'lazy';
-
-              filler.appendChild(imgClone);
-              lastInRow.after(filler);
-            }
-          }
-        }
-      });
-    }
-
-    // Wait for all images to load before filling gaps
-    function onAllImagesLoaded(callback) {
-      const images = document.querySelectorAll('.artist-quilt img');
-      let loaded = 0;
-      const total = images.length;
-
-      if (total === 0) {
-        callback();
-        return;
-      }
-
-      images.forEach(img => {
-        if (img.complete) {
-          loaded++;
-          if (loaded === total) callback();
-        } else {
-          img.addEventListener('load', () => {
-            loaded++;
-            if (loaded === total) callback();
-          });
-          img.addEventListener('error', () => {
-            loaded++;
-            if (loaded === total) callback();
-          });
-        }
-      });
-    }
-
-    // Run fillRowGaps after layout is complete
-    onAllImagesLoaded(() => {
-      // Use requestAnimationFrame + setTimeout to ensure layout is fully calculated
-      requestAnimationFrame(() => {
-        setTimeout(fillRowGaps, 50);
-      });
-    });
-
-    // Also run on window load as a fallback
-    window.addEventListener('load', () => {
-      requestAnimationFrame(() => {
-        setTimeout(fillRowGaps, 100);
-      });
-    });
-
-    window.addEventListener('resize', debounce(fillRowGaps, 100));
-
-    function debounce(func, wait) {
-      let timeout;
-      return function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(func, wait);
-      };
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -311,7 +154,7 @@ function generateArtistPage(artist) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${artist.name} - Art Collection</title>
+  <title>${artist.name} - Quilts</title>
   <style>
     * {
       margin: 0;
