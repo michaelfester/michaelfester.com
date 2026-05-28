@@ -128,6 +128,7 @@ function generateIndexPage(artists) {
       opacity: 0.8;
     }
   </style>
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="77e19730-21d0-42e6-a600-f1d2b59a65e8"></script>
 </head>
 <body>
   <div class="container">
