@@ -116,6 +116,52 @@
     <a href="https://www.linkedin.com/in/michaelfester/">LinkedIn</a>,
     <a href="https://github.com/michaelfester">GitHub</a>.
   </p>
+  <script>
+    (() => {
+      const trackLinkClick = (link) => {
+        if (!window.umami || typeof window.umami.track !== "function") {
+          return Promise.resolve();
+        }
+
+        const url = new URL(link.href, window.location.href);
+        const label = link.textContent.trim().replace(/\s+/g, " ").slice(0, 500);
+
+        return Promise.resolve(window.umami.track("Link click", {
+          url: link.href,
+          label,
+          external: url.origin !== window.location.origin,
+        })).catch(() => { });
+      };
+
+      document.addEventListener("click", (event) => {
+        const target = event.target.nodeType === Node.ELEMENT_NODE
+          ? event.target
+          : event.target.parentElement;
+        const link = target ? target.closest("a[href]") : null;
+
+        if (!link || event.defaultPrevented || event.button !== 0) {
+          return;
+        }
+
+        const opensNewContext = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+          (link.target && link.target.toLowerCase() !== "_self");
+        const tracking = trackLinkClick(link);
+
+        if (opensNewContext) {
+          return;
+        }
+
+        event.preventDefault();
+
+        Promise.race([
+          tracking,
+          new Promise((resolve) => setTimeout(resolve, 150)),
+        ]).finally(() => {
+          window.location.href = link.href;
+        });
+      });
+    })();
+  </script>
 </body>
 
 </html>
