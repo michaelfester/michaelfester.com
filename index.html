@@ -124,10 +124,13 @@
         }
 
         const url = new URL(link.href, window.location.href);
+        const trackedUrl = url.origin === window.location.origin
+          ? `${url.pathname}${url.search}${url.hash}`
+          : url.href;
         const label = link.textContent.trim().replace(/\s+/g, " ").slice(0, 500);
 
         return Promise.resolve(window.umami.track("Link click", {
-          url: link.href,
+          url: trackedUrl,
           label,
           external: url.origin !== window.location.origin,
         })).catch(() => { });
