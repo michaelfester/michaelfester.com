@@ -3,17 +3,21 @@ const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const S3_BUCKET = process.env.S3_BUCKET;
+const S3_BUCKET = 'artworks-all';
+const S3_REGION = 'us-east-2';
+
+const ARTISTS = [
+  { id: 'claude-monet', name: 'Claude Monet' },
+  { id: 'paul-cezanne', name: 'Paul Cézanne' },
+  { id: 'henri-matisse', name: 'Henri Matisse' },
+  { id: 'pablo-picasso', name: 'Pablo Picasso' },
+  { id: 'rembrandt', name: 'Rembrandt' },
+  { id: 'raphael', name: 'Raphael' },
+  { id: 'egon-schiele', name: 'Egon Schiele' },
+];
 
 // Artist display order (by artist ID)
-const ARTIST_ORDER = [
-  'claude-monet',
-  'paul-cezanne',
-  'henri-matisse',
-  'pablo-picasso',
-  'rembrandt',
-  'egon-schiele',
-];
+const ARTIST_ORDER = ARTISTS.map(artist => artist.id);
 
 // Generate random pure dark grey with lightness variation
 function getRandomArtistColor() {
@@ -22,7 +26,6 @@ function getRandomArtistColor() {
   const l = baseLightness + lightnessVariation;
   return `oklch(${l} 0 0)`; // chroma 0 = pure grey
 }
-const S3_REGION = process.env.AWS_REGION || 'us-east-1';
 const S3_BASE_URL = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
 
 const OUTPUT_DIR = path.join(__dirname, '..');
@@ -40,6 +43,17 @@ function encodeS3Path(filePath) {
 // Get full S3 URL with proper encoding
 function getS3Url(filePath) {
   return `${S3_BASE_URL}/${encodeS3Path(filePath)}`;
+}
+
+function sortArtists(artists) {
+  return artists.sort((a, b) => {
+    const indexA = ARTIST_ORDER.indexOf(a.id);
+    const indexB = ARTIST_ORDER.indexOf(b.id);
+    // Artists not in ARTIST_ORDER go to the end
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
 }
 
 // HTML template for the main index page
@@ -441,12 +455,6 @@ function generateArtistPage(artist) {
 function main() {
   console.log('Generating gallery pages...\n');
 
-  // Check for required env vars
-  if (!S3_BUCKET) {
-    console.error('Error: S3_BUCKET not set in .env file');
-    process.exit(1);
-  }
-
   // Load artists data
   if (!fs.existsSync(ARTISTS_FILE)) {
     console.error('Error: artists.json not found. Run the scraper first.');
@@ -454,16 +462,13 @@ function main() {
   }
 
   const data = JSON.parse(fs.readFileSync(ARTISTS_FILE, 'utf8'));
-  const artists = data.artists
-    .filter(a => a.artworks.length > 0)
-    .sort((a, b) => {
-      const indexA = ARTIST_ORDER.indexOf(a.id);
-      const indexB = ARTIST_ORDER.indexOf(b.id);
-      // Artists not in ARTIST_ORDER go to the end
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
+  const dataArtists = data.artists || [];
+  const dataById = new Map(dataArtists.map(artist => [artist.id, artist]));
+  const indexArtists = [
+    ...ARTISTS.map(artist => dataById.get(artist.id) || artist),
+    ...dataArtists.filter(artist => !ARTIST_ORDER.includes(artist.id) && artist.artworks?.length > 0),
+  ];
+  const artists = sortArtists(dataArtists.filter(a => a.artworks?.length > 0));
 
   console.log(`Found ${artists.length} artists with artworks`);
 
@@ -474,7 +479,7 @@ function main() {
   }
 
   // Generate main index page
-  const indexHtml = generateIndexPage(artists);
+  const indexHtml = generateIndexPage(indexArtists);
   const indexPath = path.join(quiltsDir, 'index.html');
   fs.writeFileSync(indexPath, indexHtml);
   console.log(`Generated: quilts/index.html`);

@@ -5,6 +5,7 @@
   "main": "scrape-art.js",
   "scripts": {
     "start": "node scrape-art.js",
+    "sync": "node sync-artist.js",
     "generate": "node generate-pages.js"
   },
   "dependencies": {

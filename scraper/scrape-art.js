@@ -13,11 +13,72 @@ const ARTISTS = [
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
   { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'egon-schiele', name: 'Egon Schiele' },
+  { id: 'raphael', name: 'Raphael' },
 ];
 
-const S3_BUCKET = process.env.S3_BUCKET;
-const S3_REGION = process.env.AWS_REGION || 'us-east-2';
+const S3_BUCKET = 'artworks-all';
+const S3_REGION = 'us-east-2';
 const S3_PREFIX = 'quilts'; // Base folder in S3
+
+function normalizeArtistQuery(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function printUsage() {
+  console.log('Usage: bun start [artist-id]');
+  console.log('');
+  console.log('Examples:');
+  console.log('  bun start');
+  console.log('  bun start raphael');
+  console.log('');
+  console.log('Available artists:');
+  for (const artist of ARTISTS) {
+    console.log(`  ${artist.id} (${artist.name})`);
+  }
+}
+
+function getSelectedArtists(args) {
+  if (args.includes('--help') || args.includes('-h')) {
+    printUsage();
+    process.exit(0);
+  }
+
+  const artistQueries = args.filter(arg => !arg.startsWith('-'));
+  if (artistQueries.length === 0 || artistQueries.includes('all')) {
+    return ARTISTS;
+  }
+
+  const selectedArtists = [];
+  const unknownArtists = [];
+
+  for (const query of artistQueries) {
+    const normalizedQuery = normalizeArtistQuery(query);
+    const artist = ARTISTS.find(a =>
+      a.id === normalizedQuery || normalizeArtistQuery(a.name) === normalizedQuery
+    );
+
+    if (artist) {
+      selectedArtists.push(artist);
+    } else {
+      unknownArtists.push(query);
+    }
+  }
+
+  if (unknownArtists.length > 0) {
+    console.error(`Unknown artist: ${unknownArtists.join(', ')}`);
+    console.error('');
+    printUsage();
+    process.exit(1);
+  }
+
+  return selectedArtists.filter((artist, index, arr) =>
+    arr.findIndex(a => a.id === artist.id) === index
+  );
+}
 
 // Initialize S3 client
 const s3Client = new S3Client({
@@ -462,11 +523,16 @@ async function processArtist(artist, existingArtworks = [], onProgress = null) {
 // Main function
 async function main() {
   console.log('WikiArt Scraper - Starting...\n');
+  const selectedArtists = getSelectedArtists(process.argv.slice(2));
+
+  if (selectedArtists.length !== ARTISTS.length) {
+    console.log(`Selected artists: ${selectedArtists.map(a => a.name).join(', ')}\n`);
+  }
 
   // Validate environment variables
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !S3_BUCKET) {
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
     console.error('Error: Missing required environment variables.');
-    console.error('Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET in your .env file');
+    console.error('Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in your .env file');
     process.exit(1);
   }
 
@@ -483,7 +549,7 @@ async function main() {
     }
   }
 
-  const results = [];
+  const results = [...existingData.artists];
 
   // Helper to save progress
   const saveProgress = () => {
@@ -491,7 +557,7 @@ async function main() {
     fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
   };
 
-  for (const artist of ARTISTS) {
+  for (const artist of selectedArtists) {
     // Find existing artworks for this artist
     const existingArtist = existingData.artists.find(a => a.id === artist.id);
     const existingArtworks = existingArtist ? existingArtist.artworks : [];
@@ -524,7 +590,8 @@ async function main() {
   }
 
   console.log('\n=== Scraping Complete ===');
-  console.log(`Processed ${results.length} artists`);
+  console.log(`Scraped ${selectedArtists.length} artists`);
+  console.log(`artists.json contains ${results.length} artists`);
 
   let totalArtworks = 0;
   results.forEach(artist => {

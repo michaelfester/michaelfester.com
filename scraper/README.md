@@ -84,9 +84,9 @@ The S3 bucket is accessible here: [https://us-east-2.console.aws.amazon.com/s3/b
    ```
    AWS_ACCESS_KEY_ID=AKIA...your_access_key
    AWS_SECRET_ACCESS_KEY=your_secret_key
-   AWS_REGION=us-east-1
-   S3_BUCKET=your-bucket-name
    ```
+
+The Amazon keys are stored in 1Password under **Amazon AWS S3 Personal**.
 
 **Security Note**: Never commit your `.env` file to version control. The `.gitignore` should exclude it.
 
@@ -138,6 +138,7 @@ const ARTISTS = [
   { id: 'vincent-van-gogh', name: 'Vincent van Gogh' },
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
   { id: 'rembrandt', name: 'Rembrandt' },
+  { id: 'raphael', name: 'Raphael' },
   // Add more artists here
 ];
 ```
@@ -149,17 +150,31 @@ The `id` is the URL slug used on WikiArt (the part after `/en/` in the URL).
 ### Scrape Artworks
 
 ```bash
-bun start
+bun start [artist-id]
 ```
 
 The script will:
-1. Iterate through each artist
+1. Iterate through each artist, or only the requested artist if one is provided
 2. Fetch all paintings from their WikiArt page
 3. Download each painting in original resolution + thumbnail
 4. Upload to S3 with the naming format: `{Year} - {Width}x{Height} - {Title}.jpg`
 5. Save metadata to `artists.json`
 
 The script is resumable - if interrupted, re-run it and it will skip already-downloaded artworks.
+
+To scrape only Raphael:
+
+```bash
+bun start raphael
+```
+
+### Sync One Artist
+
+```bash
+bun sync raphael
+```
+
+This scrapes/uploads the requested artist and then regenerates the static gallery pages in one command.
 
 ### Generate Gallery Pages
 
@@ -232,7 +247,7 @@ quilts/
 
 ### "Access Denied" when uploading
 - Verify your IAM user has the correct S3 permissions
-- Check that the bucket name in `.env` matches your actual bucket
+- Check that the `S3_BUCKET` constant in the scraper matches your actual bucket
 
 ### Rate limiting
 If WikiArt blocks requests, reduce the `BATCH_SIZE` in `scrape-art.js` or increase the delay between batches.
