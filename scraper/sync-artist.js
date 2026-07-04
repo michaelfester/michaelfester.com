@@ -1,17 +1,18 @@
 const { spawnSync } = require('child_process');
 
 function printUsage() {
-  console.log('Usage: bun sync <artist-id>');
+  console.log('Usage: bun sync [artist-id]');
   console.log('');
   console.log('Example:');
+  console.log('  bun sync');
   console.log('  bun sync raphael');
 }
 
 const args = process.argv.slice(2);
 
-if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+if (args.includes('--help') || args.includes('-h')) {
   printUsage();
-  process.exit(args.length === 0 ? 1 : 0);
+  process.exit(0);
 }
 
 function run(command, commandArgs) {

@@ -134,17 +134,20 @@ Edit `scrape-art.js` and add artists to the `ARTISTS` array:
 
 ```javascript
 const ARTISTS = [
-  { id: 'claude-monet', name: 'Claude Monet' },
-  { id: 'vincent-van-gogh', name: 'Vincent van Gogh' },
-  { id: 'pablo-picasso', name: 'Pablo Picasso' },
-  { id: 'rembrandt', name: 'Rembrandt' },
-  { id: 'raphael', name: 'Raphael' },
-  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
+  { id: 'claude-monet', name: 'Claude Monet', wikidataId: 'Q296' },
+  { id: 'vincent-van-gogh', name: 'Vincent van Gogh', wikidataId: 'Q5582' },
+  { id: 'pablo-picasso', name: 'Pablo Picasso', wikidataId: 'Q5593' },
+  { id: 'egon-schiele', name: 'Egon Schiele', wikidataId: 'Q153739' },
+  { id: 'lucian-freud', name: 'Lucian Freud', wikidataId: 'Q154594' },
+  { id: 'francis-bacon', name: 'Francis Bacon', wikidataId: 'Q154340' },
+  { id: 'rembrandt', name: 'Rembrandt', wikidataId: 'Q5598' },
+  { id: 'raphael', name: 'Raphael', wikidataId: 'Q5597' },
+  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe", wikidataId: 'Q46408' },
   // Add more artists here
 ];
 ```
 
-The `id` is the URL slug used on WikiArt (the part after `/en/` in the URL).
+The `id` is the URL slug used on WikiArt (the part after `/en/` in the URL). The optional `wikidataId` enables bulk metadata enrichment for medium and physical size.
 
 ## Usage
 
@@ -159,9 +162,12 @@ The script will:
 2. Fetch all paintings from their WikiArt page
 3. Download each painting in original resolution + thumbnail
 4. Upload to S3 with the naming format: `{Year} - {Width}x{Height} - {Title}.jpg`
-5. Save metadata to `artists.json`
+5. Fetch matching artwork metadata from Wikidata in one SPARQL request per artist
+6. Save metadata to `artists.json`
 
 The script is resumable - if interrupted, re-run it and it will skip already-downloaded artworks.
+
+Metadata enrichment avoids opening every individual artwork webpage. It uses the artist's `wikidataId` to fetch public Wikidata records in bulk, then matches by title and year when possible. When available, records are saved with `mediums`, `physicalSize`, `physicalDimensions`, `wikidataId`, and `wikidataUrl`.
 
 To scrape only Raphael:
 
@@ -176,6 +182,14 @@ bun sync raphael
 ```
 
 This scrapes/uploads the requested artist and then regenerates the artist index plus that artist's gallery page in one command.
+
+### Sync All Artists
+
+```bash
+bun sync
+```
+
+This scrapes/uploads all configured artists and regenerates every gallery page in one command.
 
 ### Generate Gallery Pages
 

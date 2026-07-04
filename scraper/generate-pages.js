@@ -13,6 +13,8 @@ const ARTISTS = [
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
   { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
   { id: 'egon-schiele', name: 'Egon Schiele' },
+  { id: 'lucian-freud', name: 'Lucian Freud' },
+  { id: 'francis-bacon', name: 'Francis Bacon' },
   { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'raphael', name: 'Raphael' },
 ];
@@ -102,6 +104,34 @@ function encodeS3Path(filePath) {
 // Get full S3 URL with proper encoding
 function getS3Url(filePath) {
   return `${S3_BASE_URL}/${encodeS3Path(filePath)}`;
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeJsString(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
+}
+
+function toOnclickArg(value) {
+  return escapeHtmlAttribute(escapeJsString(value));
+}
+
+function getArtworkMedium(artwork) {
+  if (Array.isArray(artwork.mediums) && artwork.mediums.length > 0) {
+    return artwork.mediums.join(', ');
+  }
+
+  return artwork.medium || '';
 }
 
 function sortArtists(artists) {
@@ -380,13 +410,14 @@ function generateArtistPage(artist) {
     </div>
     <div class="gallery">
       ${sortedArtworks.map(artwork => {
-    const escapedTitle = artwork.title.replace(/[''\']/g, "\\'");
     // Calculate width based on aspect ratio (height is fixed at 60px)
     const [width, height] = (artwork.dimensions || '100x100').split('x').map(Number);
     const aspectRatio = width / height;
     const calculatedWidth = Math.round(60 * aspectRatio);
     const bgColor = getRandomArtistColor();
-    return `<div class="artwork" style="width:${calculatedWidth}px;background:${bgColor}" onclick="openLightbox('${getS3Url(artwork.path)}', '${escapedTitle}', '${artwork.year}', '${artwork.dimensions}')"><img src="${getS3Url(artwork.miniPath || artwork.thumbnailPath || artwork.path)}" alt="${artwork.title.replace(/"/g, '&quot;')}" loading="lazy" onload="this.classList.add('loaded')"></div>`;
+    const medium = getArtworkMedium(artwork);
+    const physicalSize = artwork.physicalSize || '';
+    return `<div class="artwork" style="width:${calculatedWidth}px;background:${bgColor}" onclick="openLightbox('${toOnclickArg(getS3Url(artwork.path))}', '${toOnclickArg(artwork.title)}', '${toOnclickArg(artwork.year)}', '${toOnclickArg(artwork.dimensions)}', '${toOnclickArg(medium)}', '${toOnclickArg(physicalSize)}')"><img src="${escapeHtmlAttribute(getS3Url(artwork.miniPath || artwork.thumbnailPath || artwork.path))}" alt="${escapeHtmlAttribute(artwork.title)}" loading="lazy" onload="this.classList.add('loaded')"></div>`;
   }).join('')}
     </div>
   </div>
@@ -403,13 +434,14 @@ function generateArtistPage(artist) {
   </div>
 
   <script>
-    function openLightbox(src, title, year, dimensions) {
+    function openLightbox(src, title, year, dimensions, medium, physicalSize) {
       const lightbox = document.getElementById('lightbox');
       const img = document.getElementById('lightbox-img');
       const captionEl = document.getElementById('lightbox-caption');
+      const details = [medium, physicalSize].filter(Boolean);
 
       img.src = src;
-      captionEl.textContent = title + ', ' + year;
+      captionEl.textContent = title + ', ' + year + (details.length > 0 ? ' · ' + details.join(' · ') : '');
       lightbox.classList.add('active');
       document.body.style.overflow = 'hidden';
     }

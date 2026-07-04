@@ -7,19 +7,22 @@ const sharp = require('sharp');
 
 // Configuration
 const ARTISTS = [
-  { id: 'claude-monet', name: 'Claude Monet' },
-  { id: 'paul-cezanne', name: 'Paul Cézanne' },
-  { id: 'henri-matisse', name: 'Henri Matisse' },
-  { id: 'pablo-picasso', name: 'Pablo Picasso' },
-  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
-  { id: 'egon-schiele', name: 'Egon Schiele' },
-  { id: 'rembrandt', name: 'Rembrandt' },
-  { id: 'raphael', name: 'Raphael' },
+  { id: 'claude-monet', name: 'Claude Monet', wikidataId: 'Q296' },
+  { id: 'paul-cezanne', name: 'Paul Cézanne', wikidataId: 'Q35548' },
+  { id: 'henri-matisse', name: 'Henri Matisse', wikidataId: 'Q5589' },
+  { id: 'pablo-picasso', name: 'Pablo Picasso', wikidataId: 'Q5593' },
+  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe", wikidataId: 'Q46408' },
+  { id: 'egon-schiele', name: 'Egon Schiele', wikidataId: 'Q153739' },
+  { id: 'lucian-freud', name: 'Lucian Freud', wikidataId: 'Q154594' },
+  { id: 'francis-bacon', name: 'Francis Bacon', wikidataId: 'Q154340' },
+  { id: 'rembrandt', name: 'Rembrandt', wikidataId: 'Q5598' },
+  { id: 'raphael', name: 'Raphael', wikidataId: 'Q5597' },
 ];
 
 const S3_BUCKET = 'artworks-all';
 const S3_REGION = 'us-east-2';
 const S3_PREFIX = 'quilts'; // Base folder in S3
+const WIKIDATA_SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
 
 function normalizeArtistQuery(value) {
   return value
@@ -143,6 +146,220 @@ function normalizeTitle(title) {
   return decodeHtmlEntities(title)
     .replace(/['\']/g, "'")  // normalize all apostrophe types
     .trim();
+}
+
+function normalizeTitleForMatch(title) {
+  return normalizeTitle(title || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[`'’]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getTitleMatchKeys(title) {
+  const normalized = normalizeTitleForMatch(title);
+  const withoutParentheticals = normalizeTitleForMatch(String(title || '').replace(/\([^)]*\)/g, ' '));
+  return Array.from(new Set([normalized, withoutParentheticals].filter(Boolean)));
+}
+
+function getYearFromDate(dateValue) {
+  if (!dateValue) return null;
+  const match = String(dateValue).match(/[+-]?(\d{4})/);
+  return match ? match[1] : null;
+}
+
+function formatQuantity(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Number.isInteger(number) ? String(number) : String(Number(number.toFixed(2)));
+}
+
+function formatUnit(unit) {
+  const normalizedUnit = String(unit || '').toLowerCase();
+  if (normalizedUnit === 'centimetre' || normalizedUnit === 'centimeter') return 'cm';
+  if (normalizedUnit === 'millimetre' || normalizedUnit === 'millimeter') return 'mm';
+  if (normalizedUnit === 'metre' || normalizedUnit === 'meter') return 'm';
+  if (normalizedUnit === 'inch') return 'in';
+  return unit || '';
+}
+
+function formatPhysicalSize(metadata) {
+  const height = formatQuantity(metadata.height);
+  const width = formatQuantity(metadata.width);
+  const heightUnit = formatUnit(metadata.heightUnit || metadata.widthUnit);
+  const widthUnit = formatUnit(metadata.widthUnit || metadata.heightUnit);
+
+  if (height && width) {
+    const unit = heightUnit === widthUnit ? heightUnit : '';
+    return `${height} x ${width}${unit ? ` ${unit}` : ''}`;
+  }
+
+  if (height) return `${height}${heightUnit ? ` ${heightUnit}` : ''} high`;
+  if (width) return `${width}${widthUnit ? ` ${widthUnit}` : ''} wide`;
+  return null;
+}
+
+function getBindingValue(binding, key) {
+  return binding[key]?.value || null;
+}
+
+function buildWikidataQuery(wikidataId) {
+  return `
+SELECT ?work ?workLabel (SAMPLE(?title) AS ?titleText) (SAMPLE(?inception) AS ?inceptionDate)
+       (GROUP_CONCAT(DISTINCT ?materialLabel; separator="; ") AS ?mediums)
+       (SAMPLE(?heightAmount) AS ?height) (SAMPLE(?heightUnitLabel) AS ?heightUnit)
+       (SAMPLE(?widthAmount) AS ?width) (SAMPLE(?widthUnitLabel) AS ?widthUnit)
+WHERE {
+  ?work wdt:P170 wd:${wikidataId}.
+  OPTIONAL { ?work wdt:P1476 ?title. }
+  OPTIONAL { ?work wdt:P571 ?inception. }
+  OPTIONAL { ?work wdt:P186 ?material. }
+  OPTIONAL {
+    ?work p:P2048 ?heightStatement.
+    ?heightStatement ps:P2048 ?heightAmount.
+    OPTIONAL { ?heightStatement psv:P2048/wikibase:quantityUnit ?heightUnit. }
+  }
+  OPTIONAL {
+    ?work p:P2049 ?widthStatement.
+    ?widthStatement ps:P2049 ?widthAmount.
+    OPTIONAL { ?widthStatement psv:P2049/wikibase:quantityUnit ?widthUnit. }
+  }
+  SERVICE wikibase:label {
+    bd:serviceParam wikibase:language "en".
+    ?work rdfs:label ?workLabel.
+    ?material rdfs:label ?materialLabel.
+    ?heightUnit rdfs:label ?heightUnitLabel.
+    ?widthUnit rdfs:label ?widthUnitLabel.
+  }
+}
+GROUP BY ?work ?workLabel
+LIMIT 5000`;
+}
+
+async function fetchWikidataMetadata(artist) {
+  if (!artist.wikidataId) return [];
+
+  const params = new URLSearchParams({
+    query: buildWikidataQuery(artist.wikidataId),
+    format: 'json',
+  });
+
+  const response = await fetch(`${WIKIDATA_SPARQL_ENDPOINT}?${params}`, {
+    headers: {
+      Accept: 'application/sparql-results+json',
+      'User-Agent': 'michaelfester.com quilt scraper metadata enrichment',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Wikidata metadata fetch failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return (data.results?.bindings || []).map(binding => {
+    const title = getBindingValue(binding, 'titleText') || getBindingValue(binding, 'workLabel');
+    const mediums = (getBindingValue(binding, 'mediums') || '')
+      .split(';')
+      .map(value => value.trim())
+      .filter(Boolean);
+    const metadata = {
+      title,
+      year: getYearFromDate(getBindingValue(binding, 'inceptionDate')),
+      mediums,
+      height: getBindingValue(binding, 'height'),
+      heightUnit: getBindingValue(binding, 'heightUnit'),
+      width: getBindingValue(binding, 'width'),
+      widthUnit: getBindingValue(binding, 'widthUnit'),
+      wikidataUrl: getBindingValue(binding, 'work'),
+      wikidataId: (getBindingValue(binding, 'work') || '').split('/').pop() || null,
+    };
+    metadata.physicalSize = formatPhysicalSize(metadata);
+    return metadata;
+  }).filter(metadata => metadata.title);
+}
+
+function indexMetadataByTitle(metadataItems) {
+  const index = new Map();
+
+  for (const metadata of metadataItems) {
+    for (const key of getTitleMatchKeys(metadata.title)) {
+      const existing = index.get(key) || [];
+      existing.push(metadata);
+      index.set(key, existing);
+    }
+  }
+
+  return index;
+}
+
+function findMetadataMatch(artwork, metadataByTitle) {
+  const candidates = getTitleMatchKeys(artwork.title)
+    .flatMap(key => metadataByTitle.get(key) || []);
+
+  if (candidates.length === 0) return null;
+
+  const artworkYear = artwork.year && artwork.year !== 'Unknown' ? String(artwork.year) : null;
+  if (artworkYear) {
+    const sameYear = candidates.find(metadata => metadata.year === artworkYear);
+    if (sameYear) return sameYear;
+  }
+
+  return candidates[0];
+}
+
+async function enrichArtworksWithWikidata(artist, artworks) {
+  if (!artist.wikidataId || artworks.length === 0) return artworks;
+
+  try {
+    console.log(`\nFetching Wikidata metadata for ${artist.name} (${artist.wikidataId})...`);
+    const metadataItems = await fetchWikidataMetadata(artist);
+    const metadataByTitle = indexMetadataByTitle(metadataItems);
+    let matched = 0;
+    let enriched = 0;
+
+    const updatedArtworks = artworks.map(artwork => {
+      const metadata = findMetadataMatch(artwork, metadataByTitle);
+      if (!metadata) return artwork;
+
+      matched += 1;
+      const nextArtwork = { ...artwork };
+
+      if (metadata.mediums.length > 0) {
+        nextArtwork.mediums = metadata.mediums;
+      }
+
+      if (metadata.physicalSize) {
+        nextArtwork.physicalSize = metadata.physicalSize;
+        nextArtwork.physicalDimensions = {
+          height: formatQuantity(metadata.height),
+          heightUnit: formatUnit(metadata.heightUnit),
+          width: formatQuantity(metadata.width),
+          widthUnit: formatUnit(metadata.widthUnit),
+        };
+      }
+
+      if (metadata.wikidataId) {
+        nextArtwork.wikidataId = metadata.wikidataId;
+        nextArtwork.wikidataUrl = metadata.wikidataUrl;
+      }
+
+      if (nextArtwork.mediums || nextArtwork.physicalSize) {
+        enriched += 1;
+      }
+
+      return nextArtwork;
+    });
+
+    console.log(`Wikidata metadata matched ${matched}/${artworks.length} artworks; enriched ${enriched} with medium and/or size`);
+    return updatedArtworks;
+  } catch (error) {
+    console.error(`Wikidata metadata error for ${artist.name}: ${error.message}`);
+    return artworks;
+  }
 }
 
 // Parse the text-list page to get all artwork links and years
@@ -414,7 +631,6 @@ async function processArtist(artist, existingArtworks = [], onProgress = null) {
 
   // Create a map of existing artworks by normalized title for quick lookup
   const existingByTitle = new Map(existingArtworks.map(a => [normalizeTitle(a.title), a]));
-  const artworks = [];
 
   const BATCH_SIZE = 50;
 
@@ -514,10 +730,12 @@ async function processArtist(artist, existingArtworks = [], onProgress = null) {
     console.error(`Error processing artist ${artist.name}: ${error.message}`);
   }
 
+  const enrichedArtworks = await enrichArtworksWithWikidata(artist, Array.from(existingByTitle.values()));
+
   return {
     id: artist.id,
     name: artist.name,
-    artworks: Array.from(existingByTitle.values()),
+    artworks: enrichedArtworks,
   };
 }
 
