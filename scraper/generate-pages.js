@@ -11,13 +11,72 @@ const ARTISTS = [
   { id: 'paul-cezanne', name: 'Paul Cézanne' },
   { id: 'henri-matisse', name: 'Henri Matisse' },
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
+  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
+  { id: 'egon-schiele', name: 'Egon Schiele' },
   { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'raphael', name: 'Raphael' },
-  { id: 'egon-schiele', name: 'Egon Schiele' },
 ];
 
 // Artist display order (by artist ID)
 const ARTIST_ORDER = ARTISTS.map(artist => artist.id);
+
+function normalizeArtistQuery(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function printUsage() {
+  console.log('Usage: bun run generate [artist-id]');
+  console.log('');
+  console.log('Examples:');
+  console.log('  bun run generate');
+  console.log('  bun run generate georgia-o-keeffe');
+  console.log('');
+  console.log('Available artists:');
+  for (const artist of ARTISTS) {
+    console.log(`  ${artist.id} (${artist.name})`);
+  }
+}
+
+function getSelectedArtistIds(args) {
+  if (args.includes('--help') || args.includes('-h')) {
+    printUsage();
+    process.exit(0);
+  }
+
+  const artistQueries = args.filter(arg => !arg.startsWith('-'));
+  if (artistQueries.length === 0 || artistQueries.includes('all')) {
+    return null;
+  }
+
+  const selectedIds = [];
+  const unknownArtists = [];
+
+  for (const query of artistQueries) {
+    const normalizedQuery = normalizeArtistQuery(query);
+    const artist = ARTISTS.find(a =>
+      a.id === normalizedQuery || normalizeArtistQuery(a.name) === normalizedQuery
+    );
+
+    if (artist) {
+      selectedIds.push(artist.id);
+    } else {
+      unknownArtists.push(query);
+    }
+  }
+
+  if (unknownArtists.length > 0) {
+    console.error(`Unknown artist: ${unknownArtists.join(', ')}`);
+    console.error('');
+    printUsage();
+    process.exit(1);
+  }
+
+  return selectedIds.filter((id, index, arr) => arr.indexOf(id) === index);
+}
 
 // Generate random pure dark grey with lightness variation
 function getRandomArtistColor() {
@@ -454,6 +513,7 @@ function generateArtistPage(artist) {
 // Main function
 function main() {
   console.log('Generating gallery pages...\n');
+  const selectedArtistIds = getSelectedArtistIds(process.argv.slice(2));
 
   // Load artists data
   if (!fs.existsSync(ARTISTS_FILE)) {
@@ -468,7 +528,9 @@ function main() {
     ...ARTISTS.map(artist => dataById.get(artist.id) || artist),
     ...dataArtists.filter(artist => !ARTIST_ORDER.includes(artist.id) && artist.artworks?.length > 0),
   ];
-  const artists = sortArtists(dataArtists.filter(a => a.artworks?.length > 0));
+  const artists = sortArtists(dataArtists.filter(a =>
+    a.artworks?.length > 0 && (!selectedArtistIds || selectedArtistIds.includes(a.id))
+  ));
 
   console.log(`Found ${artists.length} artists with artworks`);
 

@@ -139,6 +139,7 @@ const ARTISTS = [
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
   { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'raphael', name: 'Raphael' },
+  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
   // Add more artists here
 ];
 ```
@@ -174,17 +175,19 @@ bun start raphael
 bun sync raphael
 ```
 
-This scrapes/uploads the requested artist and then regenerates the static gallery pages in one command.
+This scrapes/uploads the requested artist and then regenerates the artist index plus that artist's gallery page in one command.
 
 ### Generate Gallery Pages
 
 ```bash
-bun run generate
+bun run generate [artist-id]
 ```
 
 This generates static HTML gallery pages:
 - `quilts.html` - Index page listing all artists
 - `quilts/{artist-id}.html` - Individual artist pages with thumbnail grids and lightbox
+
+If an artist ID is provided, the index is still regenerated with all configured artists, but only that artist's gallery page is regenerated.
 
 ## Output
 

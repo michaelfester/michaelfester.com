@@ -31,4 +31,4 @@ function run(command, commandArgs) {
 }
 
 run(process.execPath, ['scrape-art.js', ...args]);
-run(process.execPath, ['generate-pages.js']);
+run(process.execPath, ['generate-pages.js', ...args]);

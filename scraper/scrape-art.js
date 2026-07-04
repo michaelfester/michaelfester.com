@@ -11,8 +11,9 @@ const ARTISTS = [
   { id: 'paul-cezanne', name: 'Paul Cézanne' },
   { id: 'henri-matisse', name: 'Henri Matisse' },
   { id: 'pablo-picasso', name: 'Pablo Picasso' },
-  { id: 'rembrandt', name: 'Rembrandt' },
+  { id: 'georgia-o-keeffe', name: "Georgia O'Keeffe" },
   { id: 'egon-schiele', name: 'Egon Schiele' },
+  { id: 'rembrandt', name: 'Rembrandt' },
   { id: 'raphael', name: 'Raphael' },
 ];
 
